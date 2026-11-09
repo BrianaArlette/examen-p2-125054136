@@ -1,0 +1,70 @@
+services:
+  hadoop:
+    build:
+      context: .
+      dockerfile: hadoop/Dockerfile
+    image: examen-p2-hadoop:3.3.6
+    hostname: hadoop
+    volumes:
+      - ./datos:/data/input:ro
+      - ./salidas:/data/output
+      - ./mapreduce:/workspace/mapreduce:ro
+      - ./scripts:/workspace/scripts:ro
+      - ssh_keys:/home/alumno/.ssh
+    networks:
+      - datamart_red
+    healthcheck:
+      test: ["CMD-SHELL", "runuser -u alumno -- ssh -o BatchMode=yes -o ConnectTimeout=3 localhost true"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+
+  db:
+    image: postgres:16-alpine
+    hostname: db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Falta POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Falta POSTGRES_DB en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - datamart_red
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-5051}:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:?Falta POSTGRES_USER en .env}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+      DB_NAME: ${POSTGRES_DB:?Falta POSTGRES_DB en .env}
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./salidas:/data/output:ro
+      - ssh_keys:/ssh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      hadoop:
+        condition: service_healthy
+    networks:
+      - datamart_red
+
+volumes:
+  pgdata:
+  ssh_keys:
+
+networks:
+  datamart_red:
+    driver: bridge

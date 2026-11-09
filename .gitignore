@@ -1,0 +1,10 @@
+*.csv
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+salidas/*
+!salidas/.gitkeep
+*.pem
+id_ed25519*
